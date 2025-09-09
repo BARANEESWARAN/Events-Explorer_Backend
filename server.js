@@ -10,10 +10,18 @@ const cookieParser = require("cookie-parser");
 const admin = require("firebase-admin");
 const { v4: uuidv4 } = require("uuid");
 
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-
-if (Object.keys(serviceAccount).length === 0) {
-  console.error("FIREBASE_SERVICE_ACCOUNT environment variable is required");
+let serviceAccount;
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log("Loaded service account from environment variable");
+  } else {
+    serviceAccount = require('./serviceAccountKey.json');
+    console.log("Loaded service account from file");
+  }
+} catch (error) {
+  console.error("Error loading Firebase service account:", error.message);
+  console.error("Please make sure serviceAccountKey.json exists in the root folder");
   process.exit(1);
 }
 
@@ -441,6 +449,26 @@ app.post("/verify-auth", async (req, res) => {
   }
 });
 
+app.get("/check-existing-credentials", async (req, res) => {
+  const email = req.query.email;
+  console.log('Check existing credentials for:', email);
+  
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
+  try {
+    const user = await getUserByEmailWithCredentials(email);
+    console.log('User with credentials found:', user !== null);
+    res.json({ 
+      hasCredentials: user !== null,
+      email: email
+    });
+  } catch (error) {
+    console.error("Check existing credentials error:", error);
+    res.status(500).json({ error: "Failed to check existing credentials" });
+  }
+});
 app.get("/biometric-status", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
